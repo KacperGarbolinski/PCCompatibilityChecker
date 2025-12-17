@@ -1,0 +1,78 @@
+[
+  {
+    "id": "cpu1",
+    "name": "Intel Core i5-12400",
+    "type": "CPU",
+    "manufacturer": "Intel",
+    "specifications": {
+      "Socket": "LGA1700",
+      "Cores": "6",
+      "Threads": "12"
+    }
+  },
+  {
+    "id": "cpu2",
+    "name": "AMD Ryzen 5 5600X",
+    "type": "CPU",
+    "manufacturer": "AMD",
+    "specifications": {
+      "Socket": "AM4",
+      "Cores": "6",
+      "Threads": "12"
+    }
+  },
+  {
+    "id": "mb1",
+    "name": "MSI B660M-A",
+    "type": "Motherboard",
+    "manufacturer": "MSI",
+    "specifications": {
+      "Socket": "LGA1700",
+      "MemoryType": "DDR4",
+      "Chipset": "B660"
+    }
+  },
+  {
+    "id": "mb2",
+    "name": "ASUS TUF B550-PLUS",
+    "type": "Motherboard",
+    "manufacturer": "ASUS",
+    "specifications": {
+      "Socket": "AM4",
+      "MemoryType": "DDR4",
+      "Chipset": "B550"
+    }
+  },
+  {
+    "id": "ram1",
+    "name": "Corsair Vengeance LPX 16GB DDR4",
+    "type": "RAM",
+    "manufacturer": "Corsair",
+    "specifications": {
+      "Type": "DDR4",
+      "Size": "16GB",
+      "Speed": "3200MHz"
+    }
+  },
+  {
+    "id": "ram2",
+    "name": "Kingston Fury Beast 32GB DDR5",
+    "type": "RAM",
+    "manufacturer": "Kingston",
+    "specifications": {
+      "Type": "DDR5",
+      "Size": "32GB",
+      "Speed": "5200MHz"
+    }
+  },
+  {
+    "id": "gpu1",
+    "name": "NVIDIA RTX 4060",
+    "type": "GPU",
+    "manufacturer": "NVIDIA",
+    "specifications": {
+      "VRAM": "8GB",
+      "Interface": "PCIe 4.0"
+    }
+  }
+] 
