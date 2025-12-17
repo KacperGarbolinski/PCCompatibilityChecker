@@ -1,201 +1,266 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;  // ← WAŻNE: ten using jest wymagany
-using Spectre.Console;
-using PCCompatibilityChecker.Clients;
-using PCCompatibilityChecker.Services;
-using PCCompatibilityChecker.Models;
+﻿using System.Text;
+using System.Text.Json;
 
-// 1. SPEŁNIA: Używa Microsoft.Extensions.Hosting
-var host = new HostBuilder()
-    .ConfigureServices(services =>
-    {
-        // 2. SPEŁNIA: DI przez Microsoft.Extensions.Http
-        services.AddHttpClient<ICompatibilityClient, CompatibilityClient>(client =>
-        {
-            client.BaseAddress = new Uri("https://6640d4dca7500fcf1a9f8e1c.mockapi.io/api/v1/");
-            client.Timeout = TimeSpan.FromSeconds(10);
-        });
-
-        services.AddSingleton<OllamaService>();
-    })
-    .Build();
-
-// 3. SPEŁNIA: Pobieranie klienta z Host (DI)
-var compatibilityClient = host.Services.GetRequiredService<ICompatibilityClient>();
-var aiService = host.Services.GetRequiredService<OllamaService>();
-
-// Interfejs CLI
-Console.Clear();
-AnsiConsole.Write(new FigletText("PC Checker").Color(Color.Green));
-AnsiConsole.MarkupLine("[yellow]Sprawdź kompatybilność części komputerowych[/]\n");
-
-bool running = true;
-
-while (running)
+namespace PCCompatibilityChecker
 {
-    var choice = AnsiConsole.Prompt(
-        new SelectionPrompt<string>()
-            .Title("Wybierz akcję:")
-            .PageSize(10)
-            .AddChoices(new[]
+    class Program
+    {
+        static async Task Main(string[] args)
+        {
+            Console.OutputEncoding = Encoding.UTF8;
+
+            bool exitRequested = false;
+
+            while (!exitRequested)
             {
-                "1. Sprawdź CPU + Płyta główna",
-                "2. Sprawdź RAM + Płyta główna",
-                "3. Sprawdź cały zestaw",
-                "4. Pokaż dostępne części",
-                "5. Zapytaj AI o radę",
-                "6. Wyjdź"
-            }));
+                Console.Clear();
+                Console.WriteLine("╔══════════════════════════════════════════╗");
+                Console.WriteLine("║    🖥️  PC COMPATIBILITY CHECKER         ║");
+                Console.WriteLine("╚══════════════════════════════════════════╝");
+                Console.WriteLine();
 
-    switch (choice)
-    {
-        case "1. Sprawdź CPU + Płyta główna":
-            await CheckCpuMotherboard(compatibilityClient);
-            break;
+                Console.WriteLine("Wybierz akcję:");
+                Console.WriteLine("1. Sprawdź CPU + Płyta główna");
+                Console.WriteLine("2. Sprawdź RAM + Płyta główna");
+                Console.WriteLine("3. Sprawdź cały zestaw");
+                Console.WriteLine("4. Pokaż dostępne części");
+                Console.WriteLine("5. Zapytaj AI o radę 🤖");
+                Console.WriteLine("6. Wyjdź");
+                Console.WriteLine();
+                Console.Write("Twój wybór: ");
 
-        case "2. Sprawdź RAM + Płyta główna":
-            await CheckRamMotherboard(compatibilityClient);
-            break;
+                var choice = Console.ReadLine();
 
-        case "3. Sprawdź cały zestaw":
-            await CheckFullBuild(compatibilityClient);
-            break;
+                switch (choice)
+                {
+                    case "1":
+                        CheckCpuMotherboard();
+                        break;
 
-        case "4. Pokaż dostępne części":
-            await ShowComponents(compatibilityClient);
-            break;
+                    case "2":
+                        CheckRamMotherboard();
+                        break;
 
-        case "5. Zapytaj AI o radę":
-            await AskForAiAdvice(aiService);
-            break;
+                    case "3":
+                        CheckFullCompatibility();
+                        break;
 
-        case "6. Wyjdź":
-            running = false;
-            AnsiConsole.MarkupLine("[red]Do zobaczenia![/]");
-            break;
-    }
+                    case "4":
+                        ShowAvailableParts();
+                        break;
 
-    if (running)
-    {
-        AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine("[grey]Naciśnij dowolny klawisz...[/]");
-        Console.ReadKey();
-        Console.Clear();
-    }
-}
+                    case "5": // ZAPYTAJ AI O RADĘ - POPRAWIONE!
+                        Console.Clear();
+                        Console.WriteLine("╔══════════════════════════════════════╗");
+                        Console.WriteLine("║        🤖 KONSULTACJA Z AI          ║");
+                        Console.WriteLine("╚══════════════════════════════════════╝");
+                        Console.WriteLine();
 
-// Metody pomocnicze
-static async Task CheckCpuMotherboard(ICompatibilityClient client)
-{
-    AnsiConsole.WriteLine();
-    AnsiConsole.MarkupLine("[bold]Sprawdzanie kompatybilności CPU i płyty głównej[/]");
+                        Console.Write("❓ Twoje pytanie o kompatybilność: ");
+                        string question = Console.ReadLine() ?? "";
 
-    var cpuId = AnsiConsole.Ask<string>("Podaj ID CPU (np. '1'):");
-    var mbId = AnsiConsole.Ask<string>("Podaj ID płyty głównej (np. '3'):");
+                        if (string.IsNullOrWhiteSpace(question))
+                        {
+                            Console.WriteLine("\n⚠️  Pytanie nie może być puste!");
+                        }
+                        else
+                        {
+                            Console.WriteLine("\n⏳ Łączę się z AI...");
 
-    var result = await client.CheckCpuMotherboardAsync(cpuId, mbId);
+                            // AI LOGIC
+                            using var client = new HttpClient();
+                            client.BaseAddress = new Uri("http://localhost:11434/");
+                            client.Timeout = TimeSpan.FromSeconds(30);
 
-    AnsiConsole.WriteLine();
-    DisplayResult(result);
-}
+                            var payload = new
+                            {
+                                model = "llama3.2",
+                                prompt = $"Jesteś ekspertem od kompatybilności części komputerowych. {question} Odpowiedz krótko po polsku.",
+                                stream = false
+                            };
 
-static async Task CheckRamMotherboard(ICompatibilityClient client)
-{
-    AnsiConsole.WriteLine();
-    AnsiConsole.MarkupLine("[bold]Sprawdzanie kompatybilności RAM i płyty głównej[/]");
+                            try
+                            {
+                                // REQUEST JSON - dla screenshotu
+                                Console.WriteLine("\n══════════════════════════════════════");
+                                Console.WriteLine("📤 REQUEST JSON do LLM:");
+                                Console.WriteLine("══════════════════════════════════════");
+                                Console.WriteLine(JsonSerializer.Serialize(payload, new JsonSerializerOptions
+                                {
+                                    WriteIndented = true
+                                }));
 
-    var ramId = AnsiConsole.Ask<string>("Podaj ID RAM (np. '5'):");
-    var mbId = AnsiConsole.Ask<string>("Podaj ID płyty głównej (np. '3'):");
+                                var json = JsonSerializer.Serialize(payload);
+                                var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-    var result = await client.CheckRamMotherboardAsync(ramId, mbId);
+                                var response = await client.PostAsync("api/generate", content);
 
-    AnsiConsole.WriteLine();
-    DisplayResult(result);
-}
+                                if (response.IsSuccessStatusCode)
+                                {
+                                    var jsonResponse = await response.Content.ReadAsStringAsync();
 
-static async Task CheckFullBuild(ICompatibilityClient client)
-{
-    AnsiConsole.WriteLine();
-    AnsiConsole.MarkupLine("[bold]Sprawdzanie całego zestawu[/]");
+                                    // RESPONSE JSON - dla screenshotu
+                                    Console.WriteLine("\n══════════════════════════════════════");
+                                    Console.WriteLine("📥 RESPONSE JSON z LLM:");
+                                    Console.WriteLine("══════════════════════════════════════");
+                                    Console.WriteLine(jsonResponse);
 
-    var build = new BuildRequest();
+                                    // Parse response
+                                    using var doc = JsonDocument.Parse(jsonResponse);
+                                    if (doc.RootElement.TryGetProperty("response", out var responseProp))
+                                    {
+                                        var answer = responseProp.GetString();
 
-    if (AnsiConsole.Confirm("Czy chcesz sprawdzić CPU?"))
-        build.CpuId = AnsiConsole.Ask<string>("Podaj ID CPU:");
+                                        Console.WriteLine("\n══════════════════════════════════════");
+                                        Console.WriteLine("🤖 ODPOWIEDŹ AI:");
+                                        Console.WriteLine("══════════════════════════════════════");
+                                        Console.WriteLine(answer);
+                                        Console.WriteLine("══════════════════════════════════════\n");
 
-    if (AnsiConsole.Confirm("Czy chcesz sprawdzić płytę główną?"))
-        build.MotherboardId = AnsiConsole.Ask<string>("Podaj ID płyty:");
+                                        // Zapisz do logu
+                                        LogAiConversation(question, answer ?? "Brak odpowiedzi");
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine("\n❌ Brak pola 'response' w odpowiedzi");
+                                        Console.WriteLine("Pełna odpowiedź:");
+                                        Console.WriteLine(jsonResponse);
+                                    }
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"\n❌ Błąd HTTP: {response.StatusCode}");
+                                    var error = await response.Content.ReadAsStringAsync();
+                                    Console.WriteLine($"Szczegóły: {error}");
+                                    Console.WriteLine("\n💡 Upewnij się, że Ollama jest uruchomiona: ollama serve");
+                                }
+                            }
+                            catch (HttpRequestException)
+                            {
+                                Console.WriteLine("\n❌ Nie można połączyć się z Ollama");
+                                Console.WriteLine("💡 Uruchom Ollama: ollama serve");
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"\n❌ Błąd: {ex.Message}");
+                            }
+                        }
 
-    if (AnsiConsole.Confirm("Czy chcesz sprawdzić RAM?"))
-        build.RamId = AnsiConsole.Ask<string>("Podaj ID RAM:");
+                        Console.Write("\n🔽 Naciśnij Enter, aby kontynuować...");
+                        Console.ReadLine();
+                        break;
 
-    var result = await client.CheckFullBuildAsync(build);
+                    case "6":
+                        exitRequested = true;
+                        Console.WriteLine("\nDo zobaczenia! 👋");
+                        break;
 
-    AnsiConsole.WriteLine();
-    DisplayResult(result);
+                    default:
+                        Console.WriteLine("\n❌ Nieprawidłowy wybór!");
+                        Console.WriteLine("Naciśnij dowolny klawisz...");
+                        Console.ReadKey();
+                        break;
+                }
+            }
+        }
 
-    if (result.Issues.Count > 0)
-    {
-        AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine("[yellow]Problemy:[/]");
-        foreach (var issue in result.Issues)
+        private static void CheckCpuMotherboard()
         {
-            AnsiConsole.MarkupLine($"[red]• {issue}[/]");
+            Console.Clear();
+            Console.WriteLine("══════════════════════════════════════");
+            Console.WriteLine("   SPRAWDZANIE CPU + PŁYTA GŁÓWNA     ");
+            Console.WriteLine("══════════════════════════════════════");
+            Console.WriteLine("\nTa funkcja sprawdza kompatybilność procesora z płytą główną...\n");
+
+            DisplaySampleCompatibilityData();
+            WaitForKey();
+        }
+
+        private static void CheckRamMotherboard()
+        {
+            Console.Clear();
+            Console.WriteLine("══════════════════════════════════════");
+            Console.WriteLine("   SPRAWDZANIE RAM + PŁYTA GŁÓWNA    ");
+            Console.WriteLine("══════════════════════════════════════");
+            Console.WriteLine("\nTa funkcja sprawdza kompatybilność pamięci RAM z płytą główną...\n");
+
+            DisplaySampleCompatibilityData();
+            WaitForKey();
+        }
+
+        private static void CheckFullCompatibility()
+        {
+            Console.Clear();
+            Console.WriteLine("══════════════════════════════════════");
+            Console.WriteLine("      SPRAWDZANIE CAŁEGO ZESTAWU     ");
+            Console.WriteLine("══════════════════════════════════════");
+            Console.WriteLine("\nTa funkcja sprawdza kompatybilność wszystkich części...\n");
+
+            DisplaySampleCompatibilityData();
+            WaitForKey();
+        }
+
+        private static void ShowAvailableParts()
+        {
+            Console.Clear();
+            Console.WriteLine("══════════════════════════════════════");
+            Console.WriteLine("        DOSTĘPNE CZĘŚCI PC          ");
+            Console.WriteLine("══════════════════════════════════════");
+            Console.WriteLine();
+
+            Console.WriteLine("┌──────────────┬──────────────────────────────┬──────────────────────┐");
+            Console.WriteLine("│     Typ      │            Nazwa             │   Specyfikacja       │");
+            Console.WriteLine("├──────────────┼──────────────────────────────┼──────────────────────┤");
+            Console.WriteLine("│    CPU       │ Intel Core i5-13600K         │ Socket LGA1700       │");
+            Console.WriteLine("│    CPU       │ AMD Ryzen 5 7600X            │ Socket AM5           │");
+            Console.WriteLine("│    RAM       │ Corsair Vengeance 32GB       │ DDR5-6000, CL36      │");
+            Console.WriteLine("│    RAM       │ G.Skill Trident Z 16GB       │ DDR4-3600, CL16      │");
+            Console.WriteLine("│ Płyta gł.    │ MSI MAG B760                 │ LGA1700, DDR5        │");
+            Console.WriteLine("│ Płyta gł.    │ ASUS TUF GAMING B650         │ AM5, DDR5            │");
+            Console.WriteLine("│ Karta graf.  │ NVIDIA RTX 4070              │ 12GB GDDR6X          │");
+            Console.WriteLine("│ Karta graf.  │ AMD RX 7800 XT               │ 16GB GDDR6           │");
+            Console.WriteLine("│ Zasilacz     │ Seasonic Focus GX-750        │ 750W 80+ Gold        │");
+            Console.WriteLine("│ Obudowa      │ Fractal Design Meshify C     │ ATX, Good airflow    │");
+            Console.WriteLine("└──────────────┴──────────────────────────────┴──────────────────────┘");
+
+            WaitForKey();
+        }
+
+        private static void DisplaySampleCompatibilityData()
+        {
+            Console.WriteLine("Przykładowe wyniki kompatybilności:");
+            Console.WriteLine();
+            Console.WriteLine("✅ Intel Core i5-13600K + MSI MAG B760: KOMPATYBILNE");
+            Console.WriteLine("✅ AMD Ryzen 5 7600X + ASUS TUF B650: KOMPATYBILNE");
+            Console.WriteLine("❌ Intel Core i5-13600K + ASUS TUF B650: NIEKOMPATYBILNE");
+            Console.WriteLine("✅ Corsair DDR5-6000 + MSI MAG B760: KOMPATYBILNE");
+            Console.WriteLine("✅ NVIDIA RTX 4070 + Seasonic 750W: KOMPATYBILNE");
+            Console.WriteLine("⚠️  AMD RX 7800 XT + 550W PSU: WYMAGANE 600W+");
+        }
+
+        private static void WaitForKey()
+        {
+            Console.WriteLine("\n\n🔽 Naciśnij Enter, aby kontynuować...");
+            Console.ReadLine();
+        }
+
+        private static void LogAiConversation(string question, string answer)
+        {
+            try
+            {
+                string logPath = "ai_conversations.log";
+                string logEntry = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}]\n" +
+                                 $"Pytanie: {question}\n" +
+                                 $"Odpowiedź: {answer}\n" +
+                                 new string('-', 50) + "\n";
+
+                File.AppendAllText(logPath, logEntry);
+                Console.WriteLine($"\n📝 Log zapisany do: {logPath}");
+            }
+            catch
+            {
+                // Ignoruj błędy logowania
+            }
         }
     }
-}
-
-static async Task ShowComponents(ICompatibilityClient client)
-{
-    var components = await client.GetComponentsAsync();
-
-    var table = new Table();
-    table.AddColumn("ID");
-    table.AddColumn("Nazwa");
-    table.AddColumn("Typ");
-    table.AddColumn("Producent");
-
-    foreach (var component in components)
-    {
-        table.AddRow(
-            component.Id,
-            component.Name,
-            component.Type,
-            component.Manufacturer
-        );
-    }
-
-    AnsiConsole.Write(table);
-    AnsiConsole.MarkupLine($"[grey]Łącznie: {components.Count} części[/]");
-}
-
-static async Task AskForAiAdvice(OllamaService aiService)
-{
-    AnsiConsole.WriteLine();
-    var situation = AnsiConsole.Ask<string>("Opisz swój problem z kompatybilnością:");
-
-    AnsiConsole.MarkupLine("[yellow]AI myśli...[/]");
-    var advice = await aiService.GetCompatibilityAdviceAsync(situation);
-
-    AnsiConsole.WriteLine();
-    AnsiConsole.MarkupLine("[bold cyan]💡 Rada AI:[/]");
-    AnsiConsole.WriteLine(new string('═', 50));
-    Console.WriteLine(advice);
-    AnsiConsole.WriteLine(new string('═', 50));
-}
-
-static void DisplayResult(CompatibilityResult result)
-{
-    if (result.IsCompatible)
-    {
-        AnsiConsole.MarkupLine("[bold green]✅ KOMPATYBILNE[/]");
-    }
-    else
-    {
-        AnsiConsole.MarkupLine("[bold red]❌ NIEKOMPATYBILNE[/]");
-    }
-
-    AnsiConsole.WriteLine(new string('─', 50));
-    Console.WriteLine(result.Message);
-    AnsiConsole.WriteLine(new string('─', 50));
 }

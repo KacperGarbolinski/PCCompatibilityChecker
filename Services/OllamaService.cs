@@ -1,74 +1,62 @@
-﻿using System.Text;
+﻿using System.Net.Http.Json;
 using System.Text.Json;
 
-namespace PCCompatibilityChecker.Services;
-
-public class OllamaService
+namespace PCCompatibilityChecker.Services
 {
-    private readonly HttpClient _httpClient;
-    private readonly string _model = "llama3.2";
-
-    public OllamaService()
+    public class OllamaService
     {
-        _httpClient = new HttpClient
+        private readonly HttpClient _httpClient;
+        private readonly string _model;
+
+        public OllamaService()
         {
-            BaseAddress = new Uri("http://localhost:11434"),
-            Timeout = TimeSpan.FromSeconds(30)
-        };
-    }
-
-    public async Task<string> GetCompatibilityAdviceAsync(string situation)
-    {
-        try
-        {
-            // Log request
-            Console.WriteLine("\n[DEBUG] Wysyłanie zapytania do Ollama API...");
-
-            var prompt = $"Jesteś ekspertem od kompatybilności części komputerowych. " +
-                        $"Użytkownik pyta: '{situation}'. " +
-                        $"Odpowiedz krótko (2-3 zdania) po polsku.";
-
-            var request = new
+            _httpClient = new HttpClient
             {
-                model = _model,
-                prompt = prompt,
-                stream = false
+                BaseAddress = new Uri("http://localhost:11434/"),
+                Timeout = TimeSpan.FromSeconds(30)
             };
+            _model = "llama3.2";
+        }
 
-            var jsonRequest = JsonSerializer.Serialize(request, new JsonSerializerOptions { WriteIndented = true });
-            Console.WriteLine($"Request JSON:\n{jsonRequest}\n");
-
-            var content = new StringContent(jsonRequest, Encoding.UTF8, "application/json");
-
-            var response = await _httpClient.PostAsync("api/generate", content);
-            response.EnsureSuccessStatusCode();
-
-            var responseJson = await response.Content.ReadAsStringAsync();
-            Console.WriteLine($"Response JSON:\n{responseJson}\n");
-
-            var result = JsonSerializer.Deserialize<OllamaResponse>(responseJson);
-
-            if (result == null || string.IsNullOrWhiteSpace(result.Response))
+        public async Task<string> GetAdviceAsync(string question)
+        {
+            try
             {
-                return "Nie udało się uzyskać odpowiedzi od AI.";
+                Console.WriteLine($"📤 Wysyłanie do AI: {question}");
+
+                var request = new
+                {
+                    model = _model,
+                    prompt = $"Jesteś ekspertem od kompatybilności części komputerowych. {question} Odpowiedz krótko (2-3 zdania) po polsku.",
+                    stream = false
+                };
+
+                var response = await _httpClient.PostAsJsonAsync("api/generate", request);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var content = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"📥 Otrzymano odpowiedź: {content.Length} znaków");
+
+                    using var doc = JsonDocument.Parse(content);
+                    if (doc.RootElement.TryGetProperty("response", out var responseElement))
+                    {
+                        return responseElement.GetString() ?? "Brak odpowiedzi";
+                    }
+                }
+                else
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"❌ Błąd HTTP: {response.StatusCode} - {error}");
+                }
+
+                return "Nie udało się uzyskać odpowiedzi od AI";
             }
-
-            return $"💡 **Rada AI:** {result.Response.Trim()}";
+            catch (Exception ex)
+            {
+                Console.WriteLine($"💥 Wyjątek: {ex.Message}");
+                return $"Błąd połączenia z AI: {ex.Message}";
+            }
         }
-        catch (HttpRequestException ex)
-        {
-            Console.WriteLine($"[ERROR] Błąd HTTP: {ex.Message}");
-            return "AI niedostępne. Upewnij się, że Ollama jest uruchomiona (http://localhost:11434).";
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[ERROR] {ex.Message}");
-            return "Wystąpił błąd podczas komunikacji z AI.";
-        }
-    }
-
-    private class OllamaResponse
-    {
-        public string Response { get; set; } = string.Empty;
     }
 }
