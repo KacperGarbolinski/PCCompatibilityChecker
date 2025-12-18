@@ -1,20 +1,17 @@
 ﻿using System.Net.Http.Json;
 using System.Text.Json;
+using PCCompatibilityChecker.Clients;
 
 namespace PCCompatibilityChecker.Services
 {
-    public class OllamaService
+    public class OllamaService : IChatClient
     {
         private readonly HttpClient _httpClient;
         private readonly string _model;
 
-        public OllamaService()
+        public OllamaService(HttpClient httpClient)
         {
-            _httpClient = new HttpClient
-            {
-                BaseAddress = new Uri("http://localhost:11434/"),
-                Timeout = TimeSpan.FromSeconds(30)
-            };
+            _httpClient = httpClient;
             _model = "llama3.2";
         }
 
@@ -22,8 +19,6 @@ namespace PCCompatibilityChecker.Services
         {
             try
             {
-                Console.WriteLine($"📤 Wysyłanie do AI: {question}");
-
                 var request = new
                 {
                     model = _model,
@@ -36,7 +31,6 @@ namespace PCCompatibilityChecker.Services
                 if (response.IsSuccessStatusCode)
                 {
                     var content = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"📥 Otrzymano odpowiedź: {content.Length} znaków");
 
                     using var doc = JsonDocument.Parse(content);
                     if (doc.RootElement.TryGetProperty("response", out var responseElement))
@@ -47,14 +41,13 @@ namespace PCCompatibilityChecker.Services
                 else
                 {
                     var error = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"❌ Błąd HTTP: {response.StatusCode} - {error}");
+                    return $"Błąd HTTP: {response.StatusCode} - {error}";
                 }
 
                 return "Nie udało się uzyskać odpowiedzi od AI";
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"💥 Wyjątek: {ex.Message}");
                 return $"Błąd połączenia z AI: {ex.Message}";
             }
         }

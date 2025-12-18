@@ -3,19 +3,25 @@ using PCCompatibilityChecker.Models;
 
 namespace PCCompatibilityChecker.Clients;
 
-public class CompatibilityClient(HttpClient httpClient) : ICompatibilityClient
+public class CompatibilityClient : ICompatibilityClient
 {
-    private readonly JsonSerializerOptions _options = new()
-    {
-        PropertyNameCaseInsensitive = true
-    };
+    private readonly HttpClient _httpClient;
+    private readonly JsonSerializerOptions _options;
 
-    // 1. Pobierz wszystkie komponenty
+    public CompatibilityClient(HttpClient httpClient)
+    {
+        _httpClient = httpClient;
+        _options = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
+    }
+
     public async Task<List<Component>> GetComponentsAsync()
     {
         try
         {
-            var response = await httpClient.GetAsync("components");
+            var response = await _httpClient.GetAsync("components");
             response.EnsureSuccessStatusCode();
 
             var json = await response.Content.ReadAsStringAsync();
@@ -27,7 +33,6 @@ public class CompatibilityClient(HttpClient httpClient) : ICompatibilityClient
         }
     }
 
-    // 2. Sprawdź CPU + Płyta główna
     public async Task<CompatibilityResult> CheckCpuMotherboardAsync(string cpuId, string motherboardId)
     {
         var components = await GetComponentsAsync();
@@ -60,7 +65,6 @@ public class CompatibilityClient(HttpClient httpClient) : ICompatibilityClient
         return result;
     }
 
-    // 3. Sprawdź RAM + Płyta
     public async Task<CompatibilityResult> CheckRamMotherboardAsync(string ramId, string motherboardId)
     {
         var components = await GetComponentsAsync();
@@ -87,7 +91,6 @@ public class CompatibilityClient(HttpClient httpClient) : ICompatibilityClient
         return result;
     }
 
-    // 4. Sprawdź cały zestaw
     public async Task<CompatibilityResult> CheckFullBuildAsync(BuildRequest build)
     {
         var issues = new List<string>();
@@ -115,12 +118,10 @@ public class CompatibilityClient(HttpClient httpClient) : ICompatibilityClient
         };
     }
 
-    // Proste dane mockowane
     private List<Component> GetMockComponents()
     {
         return new List<Component>
         {
-            // CPU
             new() {
                 Id = "1",
                 Name = "Intel Core i5-12400",
@@ -144,7 +145,6 @@ public class CompatibilityClient(HttpClient httpClient) : ICompatibilityClient
                 Vram = ""
             },
             
-            // Płyty główne
             new() {
                 Id = "3",
                 Name = "MSI B660M-A",
@@ -168,7 +168,6 @@ public class CompatibilityClient(HttpClient httpClient) : ICompatibilityClient
                 Vram = ""
             },
             
-            // RAM
             new() {
                 Id = "5",
                 Name = "Corsair Vengeance LPX 16GB DDR4",
@@ -192,7 +191,6 @@ public class CompatibilityClient(HttpClient httpClient) : ICompatibilityClient
                 Vram = ""
             },
             
-            // GPU
             new() {
                 Id = "7",
                 Name = "NVIDIA RTX 4060",
